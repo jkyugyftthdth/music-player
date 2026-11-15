@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "lint": "tsc --noEmit",
     "start": "vite build && electron .",
-    "dist:win": "vite build && electron-builder --win --x64"
+    "dist:win": "vite build && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
     "ffmpeg-static": "^5.2.0"
@@ -41,19 +41,68 @@
     "appId": "com.musicplayer.desktop",
     "productName": "Music Player",
     "copyright": "Music Player",
-    "directories": { "output": "release", "buildResources": "build" },
-    "files": ["dist/**/*", "electron/**/*", "build/icon.png", "package.json"],
-    "asarUnpack": ["node_modules/ffmpeg-static/**/*"],
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**/*"
+    ],
     "win": {
       "icon": "build/icon.ico",
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
-      "artifactName": "MusicPlayer-${version}-${arch}.${ext}",
       "fileAssociations": [
         {
-          "ext": ["mp3","mp2","wav","flac","ogg","oga","opus","m4a","m4b","aac","wma","ape","alac","aif","aiff","aifc","wv","mka","webm","mpc","ac3","dts","amr","au","caf","tta","dsf","dff","spx"],
+          "ext": [
+            "mp3",
+            "mp2",
+            "wav",
+            "flac",
+            "ogg",
+            "oga",
+            "opus",
+            "m4a",
+            "m4b",
+            "aac",
+            "wma",
+            "ape",
+            "alac",
+            "aif",
+            "aiff",
+            "aifc",
+            "wv",
+            "mka",
+            "webm",
+            "mpc",
+            "ac3",
+            "dts",
+            "amr",
+            "au",
+            "caf",
+            "tta",
+            "dsf",
+            "dff",
+            "spx"
+          ],
           "name": "Audio file",
           "description": "Audio file",
           "role": "Viewer"
@@ -66,7 +115,11 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Music Player"
+      "shortcutName": "Music Player",
+      "artifactName": "MusicPlayer-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "MusicPlayer-Portable-${version}.exe"
     }
   }
 }
