@@ -14,6 +14,7 @@ import {
   Play,
   Plus,
   Shuffle,
+  Trash2,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -57,6 +58,7 @@ interface SongsViewProps {
   onOpenDetails: (track: Track) => void;
   onSelectAlbum: (albumId: string) => void;
   onSelectArtist: (artistId: string) => void;
+  onRemoveTrack?: (track: Track) => void;
   onOpenFilePicker: () => void;
   viewMode: SongViewMode;
   onChangeViewMode: (mode: SongViewMode) => void;
@@ -79,6 +81,7 @@ export function SongsView({
   onSelectAlbum,
   onSelectArtist,
   onOpenFilePicker,
+  onRemoveTrack,
   viewMode,
   onChangeViewMode,
 }: SongsViewProps) {
@@ -361,6 +364,15 @@ export function SongsView({
                       >
                         <Plus size={13} />
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => onRemoveTrack?.(track)}
+                        aria-label={`Remove ${track.title} from library`}
+                        title="Remove from library"
+                        className="w-7 h-7 rounded-md bg-black/55 backdrop-blur-xs text-white hover:text-red-400 flex items-center justify-center"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </div>
                   <div
@@ -380,7 +392,7 @@ export function SongsView({
         ) : (
           <div className="w-full min-w-[680px]">
             {/* Sortable Header Row */}
-            <div className="grid grid-cols-[40px_minmax(200px,2.2fr)_minmax(140px,1.2fr)_minmax(140px,1.2fr)_76px_138px] items-center gap-3 px-3 py-2 text-[12px] font-medium text-neutral-500 dark:text-neutral-400 border-b border-black/[0.07] dark:border-white/[0.07] select-none">
+            <div className="grid grid-cols-[40px_minmax(200px,2.2fr)_minmax(140px,1.2fr)_minmax(140px,1.2fr)_76px_170px] items-center gap-3 px-3 py-2 text-[12px] font-medium text-neutral-500 dark:text-neutral-400 border-b border-black/[0.07] dark:border-white/[0.07] select-none">
               <span className="text-center">#</span>
 
               <button
@@ -437,7 +449,7 @@ export function SongsView({
                         onPlayTrack(track, filteredAndSorted);
                       }
                     }}
-                    className={`group grid grid-cols-[40px_minmax(200px,2.2fr)_minmax(140px,1.2fr)_minmax(140px,1.2fr)_76px_138px] items-center gap-3 px-3 h-11 rounded-md cursor-pointer transition-colors relative ${
+                    className={`group grid grid-cols-[40px_minmax(200px,2.2fr)_minmax(140px,1.2fr)_minmax(140px,1.2fr)_76px_170px] items-center gap-3 px-3 h-11 rounded-md cursor-pointer transition-colors relative ${
                       isCurrent
                         ? 'bg-black/[0.06] dark:bg-white/[0.08]'
                         : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
@@ -544,6 +556,18 @@ export function SongsView({
                         <Plus size={14} />
                       </button>
 
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveTrack?.(track);
+                        }}
+                        title="Remove from library"
+                        aria-label={`Remove ${track.title} from library`}
+                        className="w-8 h-8 rounded-md opacity-0 group-hover:opacity-100 flex items-center justify-center text-neutral-500 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                       <div className="relative">
                         <button
                           type="button"

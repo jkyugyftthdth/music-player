@@ -7,6 +7,7 @@ import {
   Play,
   Plus,
   Shuffle,
+  Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
 import { AccentTheme, Album, Playlist, Track } from '@/src/types/music';
@@ -29,6 +30,8 @@ interface AlbumDetailViewProps {
   onPlayAlbum: (albumId: string, shuffle?: boolean) => void;
   onAddAlbumToQueue: (albumId: string) => void;
   onAddTrackToQueue: (track: Track) => void;
+  onRemoveTrack?: (track: Track) => void;
+  onRemoveAlbum?: (albumId: string) => void;
   onToggleFavorite: (trackId: string) => void;
   onAddTrackToPlaylist: (playlistId: string, trackId: string) => void;
   onOpenDetails: (track: Track) => void;
@@ -49,6 +52,8 @@ export function AlbumDetailView({
   onPlayAlbum,
   onAddAlbumToQueue,
   onAddTrackToQueue,
+  onRemoveTrack,
+  onRemoveAlbum,
   onToggleFavorite,
   onAddTrackToPlaylist,
   onOpenDetails,
@@ -135,6 +140,15 @@ export function AlbumDetailView({
 
               <button
                 type="button"
+                onClick={() => onRemoveAlbum?.(album.id)}
+                className="h-9 px-4 rounded-md inline-flex items-center gap-2 text-[13px] font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 border border-black/[0.08] dark:border-white/[0.08] transition-colors whitespace-nowrap"
+              >
+                <Trash2 size={14} />
+                <span>Remove album</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => onAddAlbumToQueue(album.id)}
                 disabled={sortedTracks.length === 0}
                 className="h-9 px-4 rounded-md inline-flex items-center gap-2 text-[13px] font-medium bg-white dark:bg-[#2d2d2d] hover:bg-neutral-50 dark:hover:bg-[#353535] text-neutral-800 dark:text-neutral-100 border border-black/[0.08] dark:border-white/[0.08] transition-colors whitespace-nowrap"
@@ -149,7 +163,7 @@ export function AlbumDetailView({
 
       {/* Tracklist Table */}
       <div className="px-6 py-4">
-        <div className="grid grid-cols-[44px_1fr_80px_142px] items-center gap-3 px-3 py-2 text-[12px] font-medium text-neutral-500 dark:text-neutral-400 border-b border-black/[0.06] dark:border-white/[0.06]">
+        <div className="grid grid-cols-[44px_1fr_80px_174px] items-center gap-3 px-3 py-2 text-[12px] font-medium text-neutral-500 dark:text-neutral-400 border-b border-black/[0.06] dark:border-white/[0.06]">
           <span className="text-center">#</span>
           <span>Title</span>
           <span className="text-right">Duration</span>
@@ -170,7 +184,7 @@ export function AlbumDetailView({
                     onPlayTrack(track, sortedTracks);
                   }
                 }}
-                className={`group grid grid-cols-[44px_1fr_80px_142px] items-center gap-3 px-3 h-11 rounded-md cursor-pointer transition-colors relative ${
+                className={`group grid grid-cols-[44px_1fr_80px_174px] items-center gap-3 px-3 h-11 rounded-md cursor-pointer transition-colors relative ${
                   isCurrent
                     ? 'bg-black/[0.06] dark:bg-white/[0.08]'
                     : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
@@ -244,6 +258,19 @@ export function AlbumDetailView({
                     className="w-8 h-8 rounded-md opacity-0 group-hover:opacity-100 flex items-center justify-center text-neutral-500 dark:text-neutral-400 hover:bg-black/[0.06] dark:hover:bg-white/[0.08] transition-colors"
                   >
                     <Plus size={14} />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRemoveTrack?.(track);
+                    }}
+                    title="Remove from library"
+                    aria-label={`Remove ${track.title} from library`}
+                    className="w-8 h-8 rounded-md opacity-0 group-hover:opacity-100 flex items-center justify-center text-neutral-500 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <Trash2 size={14} />
                   </button>
 
                   <div className="relative">

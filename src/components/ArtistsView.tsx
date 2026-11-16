@@ -10,6 +10,7 @@ import {
   Play,
   Plus,
   Shuffle,
+  Trash2,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -49,6 +50,8 @@ interface ArtistsViewProps {
   onTogglePlayPause: () => void;
   onPlayArtist: (artistId: string, shuffle?: boolean) => void;
   onAddTrackToQueue: (track: Track) => void;
+  onRemoveTrack?: (track: Track) => void;
+  onRemoveArtist?: (artistId: string) => void;
   onOpenDetails: (track: Track) => void;
   currentTrack: Track | null;
   isPlaying: boolean;
@@ -68,6 +71,8 @@ export function ArtistsView({
   onTogglePlayPause,
   onPlayArtist,
   onAddTrackToQueue,
+  onRemoveTrack,
+  onRemoveArtist,
   onOpenDetails,
   currentTrack,
   isPlaying,
@@ -160,6 +165,14 @@ export function ArtistsView({
                   <Shuffle size={14} />
                   <span>Shuffle</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => onRemoveArtist?.(selectedArtist.id)}
+                  className="h-9 px-4 rounded-md inline-flex items-center gap-2 text-[13px] font-medium text-red-600 dark:text-red-400 hover:bg-red-500/10 border border-black/[0.08] dark:border-white/[0.08] transition-colors"
+                >
+                  <Trash2 size={14} />
+                  <span>Remove artist</span>
+                </button>
               </div>
             </div>
           </div>
@@ -212,7 +225,7 @@ export function ArtistsView({
                       onPlayTrack(track, artistTracks);
                     }
                   }}
-                  className={`group grid grid-cols-[36px_1fr_minmax(120px,1fr)_72px_76px] items-center gap-3 px-3 h-11 rounded-md cursor-pointer transition-colors ${
+                  className={`group grid grid-cols-[36px_1fr_minmax(120px,1fr)_72px_108px] items-center gap-3 px-3 h-11 rounded-md cursor-pointer transition-colors ${
                     isCurrent
                       ? 'bg-black/[0.06] dark:bg-white/[0.08]'
                       : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
@@ -287,6 +300,18 @@ export function ArtistsView({
                       className="w-8 h-8 rounded-md opacity-0 group-hover:opacity-100 flex items-center justify-center text-neutral-500 dark:text-neutral-400 hover:bg-black/[0.06] dark:hover:bg-white/[0.08]"
                     >
                       <Plus size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveTrack?.(track);
+                      }}
+                      title="Remove from library"
+                      aria-label={`Remove ${track.title} from library`}
+                      className="w-8 h-8 rounded-md opacity-0 group-hover:opacity-100 flex items-center justify-center text-neutral-500 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -381,7 +406,7 @@ export function ArtistsView({
                 <div
                   key={artist.id}
                   onClick={() => onSelectArtist(artist.id)}
-                  className="group grid grid-cols-[minmax(220px,1.8fr)_110px_110px_48px] items-center gap-3 px-3 h-13 rounded-md hover:bg-black/[0.04] dark:hover:bg-white/[0.05] cursor-pointer transition-colors"
+                  className="group grid grid-cols-[minmax(220px,1.8fr)_110px_110px_84px] items-center gap-3 px-3 h-13 rounded-md hover:bg-black/[0.04] dark:hover:bg-white/[0.05] cursor-pointer transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <CoverArt
@@ -405,7 +430,7 @@ export function ArtistsView({
                   <span className="text-[12.5px] text-neutral-500 dark:text-neutral-400 tabular-nums text-right">
                     {artistTracks.length} {artistTracks.length === 1 ? 'song' : 'songs'}
                   </span>
-                  <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       type="button"
                       onClick={(e) => {
@@ -416,6 +441,18 @@ export function ArtistsView({
                       className="w-8 h-8 rounded-full flex items-center justify-center bg-black/[0.07] dark:bg-white/[0.12] text-neutral-900 dark:text-white"
                     >
                       <Play size={13} className="fill-current ml-0.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveArtist?.(artist.id);
+                      }}
+                      aria-label={`Remove ${artist.name} from library`}
+                      title="Remove artist from library"
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10"
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
@@ -452,6 +489,18 @@ export function ArtistsView({
                       className={`absolute bottom-1.5 right-1.5 w-9 h-9 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity ${palette.buttonBg} ${palette.buttonText}`}
                     >
                       <Play size={15} className="fill-current ml-0.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveArtist?.(artist.id);
+                      }}
+                      aria-label={`Remove ${artist.name} from library`}
+                      title="Remove artist from library"
+                      className="absolute top-1.5 right-1.5 w-8 h-8 rounded-full flex items-center justify-center bg-black/60 hover:bg-black/80 text-white hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                   <h2

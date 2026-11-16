@@ -28,3 +28,7 @@ Run without packaging: `npm install` then `npm start`.
 - Audio output device picker (speaker button in the player bar) and "Pause when other apps play media".
 - New visualizers on the Now Playing page: Mirror, Circle, Scope, Dots, Aurora (plus Bars and Wave).
 - New music-note app icon.
+
+## v1.2 keyboard shortcuts
+Space play/pause (works after clicking the seek bar) · N / PageDown / Ctrl+Right next · P / PageUp / Ctrl+Left previous · Right/Left seek 5 s · Up/Down volume · M mute · S shuffle · R repeat.
+Remove (trash) buttons: songs, albums, artists, folders, queue and playlists. Removing only takes items out of the library; files on your PC are never deleted.

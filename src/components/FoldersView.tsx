@@ -7,6 +7,7 @@ import {
   Play,
   Plus,
   Shuffle,
+  Trash2,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { AccentTheme, Track } from '@/src/types/music';
@@ -24,6 +25,7 @@ interface FoldersViewProps {
   onPlayFolderTracks: (folderTracks: Track[], shuffle?: boolean) => void;
   onTogglePlayPause: () => void;
   onAddTrackToQueue: (track: Track) => void;
+  onRemoveTrack?: (track: Track) => void;
   onOpenDetails: (track: Track) => void;
 }
 
@@ -46,6 +48,7 @@ export function FoldersView({
   onPlayFolderTracks,
   onTogglePlayPause,
   onAddTrackToQueue,
+  onRemoveTrack,
   onOpenDetails,
 }: FoldersViewProps) {
   const [selectedFolderPath, setSelectedFolderPath] = useState<string | null>(null);
@@ -149,7 +152,7 @@ export function FoldersView({
                       onPlayTrack(track, activeFolder.tracks);
                     }
                   }}
-                  className={`group grid grid-cols-[38px_1fr_minmax(130px,1fr)_72px_76px] items-center gap-3 px-3 h-12 rounded-md cursor-pointer transition-colors ${
+                  className={`group grid grid-cols-[38px_1fr_minmax(130px,1fr)_72px_108px] items-center gap-3 px-3 h-12 rounded-md cursor-pointer transition-colors ${
                     isCurrent
                       ? 'bg-black/[0.06] dark:bg-white/[0.08]'
                       : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
@@ -223,6 +226,18 @@ export function FoldersView({
                       className="w-8 h-8 rounded-md opacity-0 group-hover:opacity-100 flex items-center justify-center text-neutral-500 dark:text-neutral-400 hover:bg-black/[0.06] dark:hover:bg-white/[0.08]"
                     >
                       <Plus size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onRemoveTrack?.(track);
+                      }}
+                      title="Remove from library"
+                      aria-label={`Remove ${track.title} from library`}
+                      className="w-8 h-8 rounded-md opacity-0 group-hover:opacity-100 flex items-center justify-center text-neutral-500 dark:text-neutral-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                    >
+                      <Trash2 size={14} />
                     </button>
                   </div>
                 </div>

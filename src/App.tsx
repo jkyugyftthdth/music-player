@@ -461,24 +461,104 @@ export default function App() {
     };
   }, [handleTogglePlayPause, handleNext, handlePrev]);
 
-  // Keyboard shortcuts (Space = play/pause)
+  // Keyboard shortcuts
+  //   Space ............ play / pause (works even right after clicking the seek bar or a button)
+  //   N / PageDown / Ctrl+Right ... next song     P / PageUp / Ctrl+Left ... previous song
+  //   Right / Left ..... seek +5 s / -5 s         Up / Down ... volume +5% / -5%
+  //   M mute, S shuffle, R repeat
+  const keyStateRef = useRef({ currentTime: 0, duration: 0, volume: 0.8, muted: false });
+  keyStateRef.current = { currentTime, duration, volume, muted };
+
   useEffect(() => {
+    const isTextField = (t: HTMLElement | null) => {
+      if (!t) return false;
+      if (t.isContentEditable) return true;
+      if (t.tagName === 'TEXTAREA' || t.tagName === 'SELECT') return true;
+      if (t.tagName === 'INPUT') {
+        const type = (t as HTMLInputElement).type;
+        return !['range', 'checkbox', 'radio', 'button', 'submit'].includes(type);
+      }
+      return false;
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT')
-      ) {
-        return;
-      }
-      if (e.code === 'Space') {
-        e.preventDefault();
-        handleTogglePlayPause();
+      if (isTextField(target) || e.altKey || e.metaKey) return;
+      const onRange = target?.tagName === 'INPUT' && (target as HTMLInputElement).type === 'range';
+      const st = keyStateRef.current;
+
+      switch (e.code) {
+        case 'Space':
+          e.preventDefault();
+          // a focused button would otherwise also "click" on Space
+          if (target && (target.tagName === 'BUTTON' || onRange)) target.blur();
+          if (!e.repeat) handleTogglePlayPause();
+          break;
+        case 'KeyN':
+        case 'PageDown':
+          e.preventDefault();
+          handleNext();
+          break;
+        case 'KeyP':
+        case 'PageUp':
+          e.preventDefault();
+          handlePrev();
+          break;
+        case 'ArrowRight':
+        case 'ArrowLeft': {
+          if (e.ctrlKey) {
+            e.preventDefault();
+            if (e.code === 'ArrowRight') handleNext();
+            else handlePrev();
+            break;
+          }
+          if (onRange) break; // let a focused slider move itself
+          e.preventDefault();
+          const delta = e.code === 'ArrowRight' ? 5 : -5;
+          const t = Math.max(0, Math.min(st.duration || Infinity, st.currentTime + delta));
+          audioEngine.seek(t);
+          setCurrentTime(t);
+          break;
+        }
+        case 'ArrowUp':
+        case 'ArrowDown': {
+          if (onRange) break;
+          e.preventDefault();
+          const v = Math.max(0, Math.min(1, Math.round((st.volume + (e.code === 'ArrowUp' ? 0.05 : -0.05)) * 100) / 100));
+          setVolume(v);
+          setMuted(false);
+          audioEngine.setVolume(v, false);
+          break;
+        }
+        case 'KeyM': {
+          const nextMuted = !st.muted;
+          setMuted(nextMuted);
+          audioEngine.setVolume(st.volume, nextMuted);
+          break;
+        }
+        case 'KeyS':
+          setShuffle((v) => !v);
+          break;
+        case 'KeyR':
+          setRepeatMode((m) => (m === 'off' ? 'all' : m === 'all' ? 'one' : 'off'));
+          break;
+        default:
+          break;
       }
     };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      // stop Space from "clicking" the previously focused button on key release
+      if (e.code === 'Space' && !isTextField(e.target as HTMLElement | null)) e.preventDefault();
+    };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handleTogglePlayPause]);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [handleTogglePlayPause, handleNext, handlePrev]);
 
   // Play track with context queue
   const handlePlayTrack = useCallback(
@@ -533,6 +613,89 @@ export default function App() {
       showToast(`Added "${track.title}" to queue`);
     },
     [playTrackAtQueueIndex, showToast]
+  );
+
+  // Remove songs from the library (the audio files on your PC are never deleted).
+  const handleRemoveTracksFromLibrary = useCallback(
+    (ids: string[], label: string) => {
+      const idSet = new Set(ids);
+      if (idSet.size === 0) return;
+
+      const cur = currentTrack;
+      const removingCurrent = Boolean(cur && idSet.has(cur.id));
+      const wasPlaying = isPlaying;
+      const newQueue = queue.filter((t) => !idSet.has(t.id));
+      const newIndex =
+        cur && !removingCurrent
+          ? Math.max(0, newQueue.findIndex((t) => t.id === cur.id))
+          : Math.max(0, Math.min(currentTrackIndex, newQueue.length - 1));
+
+      if (removingCurrent) {
+        // drop the loaded file so the next play starts the right song
+        audioEngine.pause();
+        const el = audioEngine.getElement();
+        el.removeAttribute('src');
+        el.load();
+        setIsPlaying(false);
+        setCurrentTime(0);
+      }
+
+      setQueue(newQueue);
+      setCurrentTrackIndex(newIndex);
+      if (removingCurrent) {
+        setDuration(newQueue[newIndex]?.duration ?? 0);
+        if (wasPlaying && newQueue.length > 0) {
+          window.setTimeout(() => playTrackAtQueueIndex(newIndex, newQueue), 0);
+        }
+      }
+
+      const remaining = tracks.filter((t) => !idSet.has(t.id));
+      setTracks(remaining);
+      setPlaylists((prev) => prev.map((pl) => ({ ...pl, trackIds: pl.trackIds.filter((id) => !idSet.has(id)) })));
+      setFavorites((prev) => {
+        const next = new Set(prev);
+        idSet.forEach((id) => next.delete(id));
+        return next;
+      });
+      const albumIdsLeft = new Set(remaining.map((t) => t.albumId));
+      const artistIdsLeft = new Set(remaining.map((t) => t.artistId));
+      setAlbums((prev) => {
+        const kept = prev.filter((al) => albumIdsLeft.has(al.id));
+        kept.forEach((al) => artistIdsLeft.add(al.artistId));
+        return kept;
+      });
+      setArtists((prev) => prev.filter((ar) => artistIdsLeft.has(ar.id)));
+      setDetailsTrack((d) => (d && idSet.has(d.id) ? null : d));
+      showToast(`Removed ${label} from library`);
+    },
+    [currentTrack, isPlaying, queue, currentTrackIndex, tracks, playTrackAtQueueIndex, showToast]
+  );
+
+  const handleRemoveTrack = useCallback(
+    (track: Track) => handleRemoveTracksFromLibrary([track.id], `"${track.title}"`),
+    [handleRemoveTracksFromLibrary]
+  );
+
+  const handleRemoveAlbum = useCallback(
+    (albumId: string) => {
+      const album = albums.find((al) => al.id === albumId);
+      const ids = tracks.filter((t) => t.albumId === albumId).map((t) => t.id);
+      if (!window.confirm(`Remove "${album?.title ?? 'this album'}" and its ${ids.length} song(s) from the library?\n\nThe files on your PC are not deleted.`)) return;
+      handleRemoveTracksFromLibrary(ids, `album "${album?.title ?? ''}"`);
+      if (selectedAlbumId === albumId) setSelectedAlbumId(null);
+    },
+    [albums, tracks, selectedAlbumId, handleRemoveTracksFromLibrary]
+  );
+
+  const handleRemoveArtist = useCallback(
+    (artistId: string) => {
+      const artist = artists.find((ar) => ar.id === artistId);
+      const ids = tracks.filter((t) => t.artistId === artistId).map((t) => t.id);
+      if (!window.confirm(`Remove "${artist?.name ?? 'this artist'}" and ${ids.length} song(s) from the library?\n\nThe files on your PC are not deleted.`)) return;
+      handleRemoveTracksFromLibrary(ids, `"${artist?.name ?? 'artist'}"`);
+      if (selectedArtistId === artistId) setSelectedArtistId(null);
+    },
+    [artists, tracks, selectedArtistId, handleRemoveTracksFromLibrary]
   );
 
   const handleAddAlbumToQueue = useCallback(
@@ -1204,6 +1367,8 @@ export default function App() {
                     onToggleFavorite={handleToggleFavorite}
                     onAddTrackToPlaylist={handleAddTrackToPlaylist}
                     onOpenDetails={(track) => setDetailsTrack(track)}
+                    onRemoveTrack={handleRemoveTrack}
+                    onRemoveAlbum={handleRemoveAlbum}
                   />
                 )}
 
@@ -1222,6 +1387,7 @@ export default function App() {
                     currentTrack={currentTrack}
                     isPlaying={isPlaying}
                     accent={accent}
+                    onRemoveAlbum={handleRemoveAlbum}
                   />
                 )}
 
@@ -1245,6 +1411,7 @@ export default function App() {
                     onSelectAlbum={openAlbumDetail}
                     onSelectArtist={openArtistDetail}
                     onOpenFilePicker={() => fileInputRef.current?.click()}
+                    onRemoveTrack={handleRemoveTrack}
                   />
                 )}
 
@@ -1266,6 +1433,8 @@ export default function App() {
                     currentTrack={currentTrack}
                     isPlaying={isPlaying}
                     accent={accent}
+                    onRemoveTrack={handleRemoveTrack}
+                    onRemoveArtist={handleRemoveArtist}
                   />
                 )}
 
@@ -1283,6 +1452,7 @@ export default function App() {
                     onTogglePlayPause={handleTogglePlayPause}
                     onAddTrackToQueue={handleAddTrackToQueue}
                     onOpenDetails={(track) => setDetailsTrack(track)}
+                    onRemoveTrack={handleRemoveTrack}
                   />
                 )}
 

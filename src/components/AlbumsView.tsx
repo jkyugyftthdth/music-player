@@ -9,6 +9,7 @@ import {
   Plus,
   Shuffle,
   Square,
+  Trash2,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { AccentTheme, Album, AlbumSortOption, AlbumViewMode, Track } from '@/src/types/music';
@@ -25,6 +26,7 @@ interface AlbumsViewProps {
   onChangeSortBy: (sort: AlbumSortOption) => void;
   onSelectAlbum: (albumId: string) => void;
   onPlayAlbum: (albumId: string, shuffle?: boolean) => void;
+  onRemoveAlbum?: (albumId: string) => void;
   onAddAlbumToQueue: (albumId: string) => void;
   onShuffleAll: () => void;
   currentTrack: Track | null;
@@ -41,6 +43,7 @@ export function AlbumsView({
   onChangeSortBy,
   onSelectAlbum,
   onPlayAlbum,
+  onRemoveAlbum,
   onAddAlbumToQueue,
   onShuffleAll,
   currentTrack,
@@ -201,7 +204,7 @@ export function AlbumsView({
         ) : viewMode === 'list' ? (
           /* NAME LIST VIEW */
           <div className="w-full">
-            <div className="grid grid-cols-[minmax(220px,2fr)_minmax(140px,1.2fr)_80px_90px_90px_84px] items-center gap-3 px-3 py-2 text-[12px] font-medium text-neutral-500 dark:text-neutral-400 border-b border-black/[0.07] dark:border-white/[0.07]">
+            <div className="grid grid-cols-[minmax(220px,2fr)_minmax(140px,1.2fr)_80px_90px_90px_116px] items-center gap-3 px-3 py-2 text-[12px] font-medium text-neutral-500 dark:text-neutral-400 border-b border-black/[0.07] dark:border-white/[0.07]">
               <span>Album name</span>
               <span>Artist</span>
               <span className="text-right">Year</span>
@@ -217,7 +220,7 @@ export function AlbumsView({
                   <div
                     key={album.id}
                     onClick={() => onSelectAlbum(album.id)}
-                    className={`group grid grid-cols-[minmax(220px,2fr)_minmax(140px,1.2fr)_80px_90px_90px_84px] items-center gap-3 px-3 h-12 rounded-md cursor-pointer transition-colors ${
+                    className={`group grid grid-cols-[minmax(220px,2fr)_minmax(140px,1.2fr)_80px_90px_90px_116px] items-center gap-3 px-3 h-12 rounded-md cursor-pointer transition-colors ${
                       isCurrentAlbum
                         ? 'bg-black/[0.05] dark:bg-white/[0.07]'
                         : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05]'
@@ -283,6 +286,18 @@ export function AlbumsView({
                       >
                         <Plus size={14} />
                       </button>
+                      <button
+                        type="button"
+                        title="Remove album from library"
+                        aria-label={`Remove ${album.title} from library`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveAlbum?.(album.id);
+                        }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center text-neutral-600 dark:text-neutral-300 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </div>
                 );
@@ -339,6 +354,19 @@ export function AlbumsView({
                           size={viewMode === 'small' ? 14 : 16}
                           className="fill-current ml-0.5"
                         />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemoveAlbum?.(album.id);
+                        }}
+                        title="Remove album from library"
+                        aria-label={`Remove ${album.title} from library`}
+                        className="w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 text-white hover:text-red-400 flex items-center justify-center backdrop-blur-xs transition-colors"
+                      >
+                        <Trash2 size={14} />
                       </button>
 
                       {viewMode !== 'small' && (
