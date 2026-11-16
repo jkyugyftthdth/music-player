@@ -1,27 +1,45 @@
 import {
   ArrowDown,
   ArrowUp,
+  Check,
   FolderPlus,
   Heart,
   Info,
+  LayoutGrid,
+  List,
   ListPlus,
+  MoreHorizontal,
   Music2,
   Pause,
   Play,
   Plus,
   Shuffle,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccentTheme,
   Playlist,
   SongSortColumn,
+  SongViewMode,
   SortDirection,
   Track,
 } from '@/src/types/music';
 import { ACCENT_PALETTES } from '@/src/utils/accent';
 import { formatDuration, formatTotalDuration } from '@/src/utils/format';
 import { CoverArt } from './CoverArt';
+
+const SONG_VIEW_OPTIONS: { id: SongViewMode; label: string }[] = [
+  { id: 'list', label: 'Song list' },
+  { id: 'large', label: 'Large grid' },
+  { id: 'medium', label: 'Medium grid' },
+  { id: 'small', label: 'Small grid' },
+];
+
+const SONG_GRID: Record<'small' | 'medium' | 'large', { cols: string; gap: string; icon: number }> = {
+  small: { cols: 'grid-cols-[repeat(auto-fill,minmax(120px,1fr))]', gap: 'gap-3', icon: 28 },
+  medium: { cols: 'grid-cols-[repeat(auto-fill,minmax(176px,1fr))]', gap: 'gap-4', icon: 40 },
+  large: { cols: 'grid-cols-[repeat(auto-fill,minmax(248px,1fr))]', gap: 'gap-5', icon: 56 },
+};
 
 interface SongsViewProps {
   tracks: Track[];
@@ -40,6 +58,8 @@ interface SongsViewProps {
   onSelectAlbum: (albumId: string) => void;
   onSelectArtist: (artistId: string) => void;
   onOpenFilePicker: () => void;
+  viewMode: SongViewMode;
+  onChangeViewMode: (mode: SongViewMode) => void;
 }
 
 export function SongsView({
@@ -59,12 +79,25 @@ export function SongsView({
   onSelectAlbum,
   onSelectArtist,
   onOpenFilePicker,
+  viewMode,
+  onChangeViewMode,
 }: SongsViewProps) {
   const [genreFilter, setGenreFilter] = useState<string>('all');
   const [sortCol, setSortCol] = useState<SongSortColumn>('title');
   const [sortDir, setSortDir] = useState<SortDirection>('asc');
   const [playlistMenuTrackId, setPlaylistMenuTrackId] = useState<string | null>(null);
   const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
+  const viewMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!viewMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) setViewMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [viewMenuOpen]);
 
   const palette = ACCENT_PALETTES[accent];
 
@@ -170,6 +203,55 @@ export function SongsView({
             ))}
           </select>
 
+          {/* View options: list or grid sizes */}
+          <div className="relative" ref={viewMenuRef}>
+            <button
+              type="button"
+              onClick={() => setViewMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={viewMenuOpen}
+              aria-label="Song view options"
+              className="h-9 px-3 rounded-md inline-flex items-center gap-2 text-[12.5px] font-medium bg-white dark:bg-[#2b2b2b] hover:bg-neutral-50 dark:hover:bg-[#343434] text-neutral-800 dark:text-neutral-200 border border-black/[0.08] dark:border-white/[0.08] transition-colors"
+            >
+              <span>{SONG_VIEW_OPTIONS.find((o) => o.id === viewMode)?.label}</span>
+              <MoreHorizontal size={16} />
+            </button>
+            {viewMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Song view options"
+                className="absolute right-0 top-10 w-48 py-1.5 rounded-lg bg-white dark:bg-[#2c2c2c] border border-black/10 dark:border-white/10 shadow-xl z-40"
+              >
+                <div className="px-3 py-1 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+                  View as
+                </div>
+                {SONG_VIEW_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={viewMode === opt.id}
+                    onClick={() => {
+                      onChangeViewMode(opt.id);
+                      setViewMenuOpen(false);
+                    }}
+                    className={`w-full px-3 py-2 flex items-center justify-between text-[13px] transition-colors ${
+                      viewMode === opt.id
+                        ? `bg-black/[0.06] dark:bg-white/[0.09] font-medium ${palette.activeText}`
+                        : 'text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      {opt.id === 'list' ? <List size={14} /> : <LayoutGrid size={14} />}
+                      <span>{opt.label}</span>
+                    </span>
+                    {viewMode === opt.id && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={onOpenFilePicker}
@@ -202,6 +284,81 @@ export function SongsView({
             <p className="text-[13px] text-neutral-500 dark:text-neutral-400 mt-1">
               Adjust your filters or add local audio files from your device.
             </p>
+          </div>
+        ) : viewMode !== 'list' ? (
+          <div className={`grid ${SONG_GRID[viewMode].cols} ${SONG_GRID[viewMode].gap} py-2`}>
+            {filteredAndSorted.map((track) => {
+              const isCurrent = currentTrack?.id === track.id;
+              const isFav = favorites.has(track.id);
+              return (
+                <div
+                  key={track.id}
+                  onClick={() => (isCurrent ? onTogglePlayPause() : onPlayTrack(track, filteredAndSorted))}
+                  className="group cursor-pointer rounded-lg p-2 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors"
+                >
+                  <div className="relative aspect-square rounded-md overflow-hidden shadow-sm">
+                    <CoverArt
+                      src={track.coverUrl}
+                      alt={track.title}
+                      className="w-full h-full transition-transform duration-300 group-hover:scale-105"
+                      iconSize={SONG_GRID[viewMode].icon}
+                      roundedClass="rounded-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isCurrent) onTogglePlayPause();
+                        else onPlayTrack(track, filteredAndSorted);
+                      }}
+                      aria-label={`${isCurrent && isPlaying ? 'Pause' : 'Play'} ${track.title}`}
+                      className={`absolute bottom-2 right-2 w-9 h-9 rounded-full flex items-center justify-center shadow-md transition-opacity ${palette.buttonBg} ${palette.buttonText} ${
+                        isCurrent ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      }`}
+                    >
+                      {isCurrent && isPlaying ? (
+                        <Pause size={15} className="fill-current" />
+                      ) : (
+                        <Play size={15} className="fill-current ml-0.5" />
+                      )}
+                    </button>
+                    <div
+                      className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => onToggleFavorite(track.id)}
+                        aria-label={isFav ? 'Remove from favorites' : 'Add to favorites'}
+                        className={`w-7 h-7 rounded-md bg-black/55 backdrop-blur-xs flex items-center justify-center ${
+                          isFav ? 'text-rose-400' : 'text-white'
+                        }`}
+                      >
+                        <Heart size={13} className={isFav ? 'fill-current' : ''} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onAddTrackToQueue(track)}
+                        aria-label={`Add ${track.title} to queue`}
+                        className="w-7 h-7 rounded-md bg-black/55 backdrop-blur-xs text-white flex items-center justify-center"
+                      >
+                        <Plus size={13} />
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    className={`mt-2 text-[13px] font-medium truncate ${
+                      isCurrent ? palette.activeText : 'text-neutral-900 dark:text-neutral-100'
+                    }`}
+                  >
+                    {track.title}
+                  </div>
+                  <div className="text-[12px] text-neutral-500 dark:text-neutral-400 truncate">
+                    {track.artist} · {formatDuration(track.duration)}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="w-full min-w-[680px]">

@@ -199,7 +199,25 @@ function synthesizeTrackToWavUrl(recipe: SynthRecipe, durationSec: number): stri
   return URL.createObjectURL(blob);
 }
 
+export interface AudioOutputSettings {
+  outputDeviceId: string; // '' = system default device
+  pauseOnOtherMedia: boolean;
+}
+
+function loadOutputSettings(): AudioOutputSettings {
+  try {
+    const raw = JSON.parse(localStorage.getItem('mp-audio-settings') || '{}');
+    return {
+      outputDeviceId: typeof raw.outputDeviceId === 'string' ? raw.outputDeviceId : '',
+      pauseOnOtherMedia: raw.pauseOnOtherMedia !== false,
+    };
+  } catch {
+    return { outputDeviceId: '', pauseOnOtherMedia: true };
+  }
+}
+
 class MediaAudioEngine {
+  private outputSettings: AudioOutputSettings = loadOutputSettings();
   private audio: HTMLAudioElement;
   private ctx: AudioContext | null = null;
   private source: MediaElementAudioSourceNode | null = null;
@@ -260,12 +278,40 @@ class MediaAudioEngine {
       currentNode = filter;
     }
     currentNode.connect(this.gainNode);
+    this.applyOutputDevice();
     this.gainNode.connect(this.analyser);
     this.analyser.connect(this.ctx.destination);
   }
 
   getElement(): HTMLAudioElement {
     return this.audio;
+  }
+
+  private applyOutputDevice() {
+    const ctx = this.ctx as (AudioContext & { setSinkId?: (id: string) => Promise<void> }) | null;
+    if (ctx?.setSinkId) {
+      ctx.setSinkId(this.outputSettings.outputDeviceId || '').catch(() => {
+        // device unplugged: fall back to the system default
+        ctx.setSinkId?.('').catch(() => {});
+      });
+    }
+  }
+
+  getOutputSettings(): AudioOutputSettings {
+    return { ...this.outputSettings };
+  }
+
+  updateOutputSettings(patch: Partial<AudioOutputSettings>) {
+    this.outputSettings = { ...this.outputSettings, ...patch };
+    try {
+      localStorage.setItem('mp-audio-settings', JSON.stringify(this.outputSettings));
+    } catch {
+      // storage unavailable
+    }
+    if ('outputDeviceId' in patch) {
+      this.ensureGraph();
+      this.applyOutputDevice();
+    }
   }
 
   getAnalyser(): AnalyserNode | null {

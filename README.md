@@ -20,3 +20,11 @@ Run without packaging: `npm install` then `npm start`.
 - Windows media overlay + keyboard media keys show title, artist and cover art.
 - Double-click / "Open with" an audio file, drag & drop files, or use the existing file/folder pickers.
 - Fonts are bundled, so the app works fully offline.
+
+## v1.1
+- Clean install: no bundled songs, albums, artists or playlists.
+- Your library, playlists, favorites, queue and every setting are saved automatically and restored on the next launch (stored in your Windows user profile, not inside the app).
+- Songs and Artists views have Large / Medium / Small grid sizes as well as the list.
+- Audio output device picker (speaker button in the player bar) and "Pause when other apps play media".
+- New visualizers on the Now Playing page: Mirror, Circle, Scope, Dots, Aurora (plus Bars and Wave).
+- New music-note app icon.

@@ -31,6 +31,7 @@ import {
   AlbumViewMode,
   Artist,
   ArtistViewMode,
+  SongViewMode,
   EQ_PRESET_GAINS,
   EqPreset,
   Playlist,
@@ -40,6 +41,8 @@ import {
 } from '@/src/types/music';
 import { ACCENT_PALETTES } from '@/src/utils/accent';
 import { sanitizeTitleFromFilename } from '@/src/utils/format';
+import type { SavedState } from '@/src/utils/persist';
+import { loadSavedState, saveState } from '@/src/utils/persist';
 
 function shuffleArray<T>(items: T[]): T[] {
   const arr = [...items];
@@ -103,7 +106,7 @@ export default function App() {
   const [artists, setArtists] = useState<Artist[]>(INITIAL_ARTISTS);
   const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS);
   const [playlists, setPlaylists] = useState<Playlist[]>(INITIAL_PLAYLISTS);
-  const [favorites, setFavorites] = useState<Set<string>>(() => new Set(['trk-gh-1', 'trk-mt-1']));
+  const [favorites, setFavorites] = useState<Set<string>>(() => new Set());
 
   // Navigation & view state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -123,7 +126,8 @@ export default function App() {
   // Albums view options (Small, Medium, Large grid, Name list)
   const [albumViewMode, setAlbumViewMode] = useState<AlbumViewMode>('medium');
   const [albumSortBy, setAlbumSortBy] = useState<AlbumSortOption>('title-asc');
-  const [artistViewMode, setArtistViewMode] = useState<ArtistViewMode>('grid');
+  const [artistViewMode, setArtistViewMode] = useState<ArtistViewMode>('medium');
+  const [songViewMode, setSongViewMode] = useState<SongViewMode>('list');
 
   // Theme & Accent
   const [theme, setTheme] = useState<ThemeMode>('dark');
@@ -166,6 +170,118 @@ export default function App() {
     toastTimerRef.current = window.setTimeout(() => {
       setToastMessage(null);
     }, 2400);
+  }, []);
+
+
+  // ---- Saved library & settings (like Windows Media Player, everything is still there next launch) ----
+  const [hydrated, setHydrated] = useState(false);
+  const isPlayingRef = useRef(false);
+  isPlayingRef.current = isPlaying;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const saved = await loadSavedState();
+      if (cancelled) return;
+      if (saved) {
+        const st = saved.settings ?? {};
+        if (st.theme) setTheme(st.theme);
+        if (st.accent) setAccent(st.accent);
+        if (st.albumViewMode) setAlbumViewMode(st.albumViewMode);
+        if (st.albumSortBy) setAlbumSortBy(st.albumSortBy);
+        if (st.artistViewMode) {
+          // older saves used 'grid'
+          setArtistViewMode((st.artistViewMode as string) === 'grid' ? 'medium' : st.artistViewMode);
+        }
+        if (st.songViewMode) setSongViewMode(st.songViewMode);
+        if (typeof st.sidebarCollapsed === 'boolean') setSidebarCollapsed(st.sidebarCollapsed);
+        if (typeof st.volume === 'number') setVolume(st.volume);
+        if (typeof st.muted === 'boolean') setMuted(st.muted);
+        if (typeof st.shuffle === 'boolean') setShuffle(st.shuffle);
+        if (st.repeatMode) setRepeatMode(st.repeatMode);
+        if (typeof st.playbackRate === 'number') setPlaybackRate(st.playbackRate);
+        if (st.eqPreset) setEqPreset(st.eqPreset);
+        if (Array.isArray(st.eqBands) && st.eqBands.length === 10) setEqBands(st.eqBands);
+        if (typeof st.eqEnabled === 'boolean') setEqEnabled(st.eqEnabled);
+
+        setTracks(saved.tracks ?? []);
+        setAlbums(saved.albums ?? []);
+        setArtists(saved.artists ?? []);
+        setPlaylists(saved.playlists ?? []);
+        setFavorites(new Set(saved.favorites ?? []));
+
+        const byId = new Map((saved.tracks ?? []).map((t) => [t.id, t]));
+        const restoredQueue = (saved.queueIds ?? [])
+          .map((id) => byId.get(id))
+          .filter((t): t is Track => Boolean(t));
+        if (restoredQueue.length) {
+          setQueue(restoredQueue);
+          const idx = Math.max(0, restoredQueue.findIndex((t) => t.id === saved.currentTrackId));
+          setCurrentTrackIndex(idx);
+          setDuration(restoredQueue[idx]?.duration ?? 0);
+        }
+      }
+      setHydrated(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const snapshotRef = useRef<SavedState | null>(null);
+  snapshotRef.current = {
+    version: 1,
+    settings: {
+      theme, accent, albumViewMode, albumSortBy, artistViewMode, songViewMode, sidebarCollapsed,
+      volume, muted, shuffle, repeatMode, playbackRate, eqPreset, eqBands, eqEnabled,
+    },
+    tracks,
+    albums,
+    artists,
+    playlists,
+    favorites: Array.from(favorites),
+    queueIds: queue.map((t) => t.id),
+    currentTrackId: currentTrack?.id ?? null,
+  };
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const timer = window.setTimeout(() => {
+      if (snapshotRef.current) saveState(snapshotRef.current);
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [
+    hydrated, theme, accent, albumViewMode, albumSortBy, artistViewMode, songViewMode, sidebarCollapsed,
+    volume, muted, shuffle, repeatMode, playbackRate, eqPreset, eqBands, eqEnabled,
+    tracks, albums, artists, playlists, favorites, queue, currentTrack?.id,
+  ]);
+
+  // Flush right before the window closes so nothing added in the last half second is lost.
+  useEffect(() => {
+    const flush = () => {
+      if (hydrated && snapshotRef.current) saveState(snapshotRef.current);
+    };
+    window.addEventListener('pagehide', flush);
+    window.addEventListener('beforeunload', flush);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      window.removeEventListener('beforeunload', flush);
+    };
+  }, [hydrated]);
+
+  // Pause automatically when another app starts playing media (Windows).
+  useEffect(() => {
+    const api = nativeApi();
+    if (!api) return;
+    api.setMediaWatch(true);
+    const off = api.onOtherMediaPlaying(() => {
+      if (audioEngine.getOutputSettings().pauseOnOtherMedia && isPlayingRef.current) {
+        audioEngine.pause();
+      }
+    });
+    return () => {
+      off();
+    };
   }, []);
 
   // Sync theme class with <html>
@@ -527,18 +643,23 @@ export default function App() {
           tempAudio.src = url;
         });
 
-      // Embedded album art: identical pictures (same album) share one object URL.
+      // Embedded album art: identical pictures (same album) are stored once. In the desktop app the
+      // picture is saved to disk so covers survive restarts.
       const coverCache = new Map<string, string>();
-      const coverUrlFor = (cover: NativeAnalysis['cover']): string | undefined => {
+      const coverUrlFor = async (cover: NativeAnalysis['cover']): Promise<string | undefined> => {
         if (!cover || !cover.data?.length) return undefined;
         const d = cover.data;
         let h = 2166136261;
         const step = Math.max(1, Math.floor(d.length / 4096));
         for (let i = 0; i < d.length; i += step) h = Math.imul(h ^ d[i], 16777619);
-        const key = `${d.length}:${h >>> 0}`;
+        const key = `c${d.length}_${h >>> 0}`;
         let url = coverCache.get(key);
         if (!url) {
-          url = coverToUrl(cover);
+          try {
+            url = api ? await api.saveCover(key, d, cover.mime) : coverToUrl(cover);
+          } catch {
+            url = coverToUrl(cover);
+          }
           if (url) coverCache.set(key, url);
         }
         return url;
@@ -591,13 +712,14 @@ export default function App() {
         const convert = Boolean(api && srcPath && needsTranscode(file.name, info.codec));
         let objectUrl: string | undefined;
         let dur: number;
+        const makeUrl = async () => (api && srcPath ? api.mediaUrl(srcPath) : URL.createObjectURL(file));
         if (info.duration && info.duration > 0) {
           dur = Math.max(1, Math.round(info.duration));
-          if (!convert) objectUrl = URL.createObjectURL(file);
+          if (!convert) objectUrl = await makeUrl();
         } else if (convert) {
           dur = 180;
         } else {
-          objectUrl = URL.createObjectURL(file);
+          objectUrl = await makeUrl();
           dur = await readDuration(objectUrl);
         }
 
@@ -621,7 +743,7 @@ export default function App() {
         const yearMatch = tag('date', 'year', 'originaldate', 'originalyear').match(/\d{4}/);
         const year = yearMatch ? parseInt(yearMatch[0], 10) : new Date().getFullYear();
         const trackTagNum = parseInt(tag('track', 'tracknumber'), 10);
-        const coverUrl = coverUrlFor(analysis?.cover ?? null);
+        const coverUrl = await coverUrlFor(analysis?.cover ?? null);
 
         let albumId = localAlbumId;
         let albumTitle = 'Local Music';
@@ -1105,6 +1227,8 @@ export default function App() {
 
                 {activeSection === 'songs' && (
                   <SongsView
+                    viewMode={songViewMode}
+                    onChangeViewMode={setSongViewMode}
                     tracks={filteredTracks}
                     currentTrack={currentTrack}
                     isPlaying={isPlaying}

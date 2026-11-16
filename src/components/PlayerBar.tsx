@@ -19,6 +19,7 @@ import {
 import { AccentTheme, EqPreset, RepeatMode, ThemeMode, Track } from '@/src/types/music';
 import { ACCENT_PALETTES } from '@/src/utils/accent';
 import { formatDuration } from '@/src/utils/format';
+import { AudioOutputMenu } from './AudioOutputMenu';
 import { CoverArt } from './CoverArt';
 
 interface PlayerBarProps {
@@ -276,6 +277,7 @@ export function PlayerBar({
 
       {/* Right: 10-Band Equalizer / Volume / Queue / Mini Player / Expand */}
       <div className="flex items-center justify-end gap-1.5 relative">
+        <AudioOutputMenu accent={accent} />
         <button
           type="button"
           onClick={onOpenEqualizer}

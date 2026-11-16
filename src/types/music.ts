@@ -1,5 +1,6 @@
 export type AlbumViewMode = 'small' | 'medium' | 'large' | 'list';
-export type ArtistViewMode = 'grid' | 'list';
+export type ArtistViewMode = 'small' | 'medium' | 'large' | 'list';
+export type SongViewMode = 'small' | 'medium' | 'large' | 'list';
 export type ActiveSection =
   | 'albums'
   | 'songs'

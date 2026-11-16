@@ -23,6 +23,19 @@ import { ACCENT_PALETTES } from '@/src/utils/accent';
 import { formatDuration, formatTotalDuration } from '@/src/utils/format';
 import { CoverArt } from './CoverArt';
 
+const ARTIST_VIEW_OPTIONS: { id: ArtistViewMode; label: string }[] = [
+  { id: 'large', label: 'Large grid' },
+  { id: 'medium', label: 'Medium grid' },
+  { id: 'small', label: 'Small grid' },
+  { id: 'list', label: 'Name list' },
+];
+
+const ARTIST_GRID: Record<'small' | 'medium' | 'large', { cols: string; avatar: string; pad: string; icon: number }> = {
+  small: { cols: 'grid-cols-[repeat(auto-fill,minmax(128px,1fr))] gap-3', avatar: 'w-20 h-20', pad: 'p-3', icon: 24 },
+  medium: { cols: 'grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-5', avatar: 'w-32 h-32', pad: 'p-4', icon: 34 },
+  large: { cols: 'grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-6', avatar: 'w-44 h-44', pad: 'p-5', icon: 44 },
+};
+
 interface ArtistsViewProps {
   artists: Artist[];
   albums: Album[];
@@ -305,10 +318,10 @@ export function ArtistsView({
             onClick={() => setMenuOpen((v) => !v)}
             aria-haspopup="menu"
             aria-expanded={menuOpen}
-            aria-label={`Artist view options (${viewMode === 'grid' ? 'Grid' : 'Name list'})`}
+            aria-label={`Artist view options (${ARTIST_VIEW_OPTIONS.find((o) => o.id === viewMode)?.label})`}
             className="h-9 px-3 rounded-md inline-flex items-center gap-2 text-[12.5px] font-medium bg-white dark:bg-[#2b2b2b] hover:bg-neutral-50 dark:hover:bg-[#343434] text-neutral-800 dark:text-neutral-200 border border-black/[0.08] dark:border-white/[0.08] transition-colors"
           >
-            <span>{viewMode === 'grid' ? 'Grid' : 'Name list'}</span>
+            <span>{ARTIST_VIEW_OPTIONS.find((o) => o.id === viewMode)?.label}</span>
             <MoreHorizontal size={16} />
           </button>
 
@@ -316,51 +329,34 @@ export function ArtistsView({
             <div
               role="menu"
               aria-label="Artist view options"
-              className="absolute right-0 top-10 w-40 py-1.5 rounded-lg bg-white dark:bg-[#2c2c2c] border border-black/10 dark:border-white/10 shadow-xl z-40"
+              className="absolute right-0 top-10 w-48 py-1.5 rounded-lg bg-white dark:bg-[#2c2c2c] border border-black/10 dark:border-white/10 shadow-xl z-40"
             >
               <div className="px-3 py-1 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
                 View as
               </div>
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={viewMode === 'grid'}
-                onClick={() => {
-                  onChangeViewMode('grid');
-                  setMenuOpen(false);
-                }}
-                className={`w-full px-3 py-2 flex items-center justify-between text-[13px] transition-colors ${
-                  viewMode === 'grid'
-                    ? `bg-black/[0.06] dark:bg-white/[0.09] font-medium ${palette.activeText}`
-                    : 'text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
-                }`}
-              >
-                <span className="flex items-center gap-2.5">
-                  <LayoutGrid size={14} />
-                  <span>Grid</span>
-                </span>
-                {viewMode === 'grid' && <Check size={14} />}
-              </button>
-              <button
-                type="button"
-                role="menuitemradio"
-                aria-checked={viewMode === 'list'}
-                onClick={() => {
-                  onChangeViewMode('list');
-                  setMenuOpen(false);
-                }}
-                className={`w-full px-3 py-2 flex items-center justify-between text-[13px] transition-colors ${
-                  viewMode === 'list'
-                    ? `bg-black/[0.06] dark:bg-white/[0.09] font-medium ${palette.activeText}`
-                    : 'text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
-                }`}
-              >
-                <span className="flex items-center gap-2.5">
-                  <List size={14} />
-                  <span>Name list</span>
-                </span>
-                {viewMode === 'list' && <Check size={14} />}
-              </button>
+              {ARTIST_VIEW_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={viewMode === opt.id}
+                  onClick={() => {
+                    onChangeViewMode(opt.id);
+                    setMenuOpen(false);
+                  }}
+                  className={`w-full px-3 py-2 flex items-center justify-between text-[13px] transition-colors ${
+                    viewMode === opt.id
+                      ? `bg-black/[0.06] dark:bg-white/[0.09] font-medium ${palette.activeText}`
+                      : 'text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5">
+                    {opt.id === 'list' ? <List size={14} /> : <LayoutGrid size={14} />}
+                    <span>{opt.label}</span>
+                  </span>
+                  {viewMode === opt.id && <Check size={14} />}
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -427,7 +423,7 @@ export function ArtistsView({
             })}
           </div>
         ) : (
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(196px,1fr))] gap-5">
+          <div className={`grid ${ARTIST_GRID[viewMode].cols}`}>
             {artists.map((artist) => {
               const artistAlbums = albums.filter((al) => al.artistId === artist.id);
               const artistTracks = tracks.filter((t) => t.artistId === artist.id);
@@ -436,14 +432,14 @@ export function ArtistsView({
                 <div
                   key={artist.id}
                   onClick={() => onSelectArtist(artist.id)}
-                  className="group p-4 rounded-lg bg-white/60 dark:bg-[#272727]/80 hover:bg-white dark:hover:bg-[#2f2f2f] border border-black/[0.05] dark:border-white/[0.05] cursor-pointer transition-colors flex flex-col items-center text-center"
+                  className={`group ${ARTIST_GRID[viewMode].pad} rounded-lg bg-white/60 dark:bg-[#272727]/80 hover:bg-white dark:hover:bg-[#2f2f2f] border border-black/[0.05] dark:border-white/[0.05] cursor-pointer transition-colors flex flex-col items-center text-center`}
                 >
-                  <div className="relative w-32 h-32 rounded-full overflow-hidden mb-3 shadow-sm">
+                  <div className={`relative ${ARTIST_GRID[viewMode].avatar} rounded-full overflow-hidden mb-3 shadow-sm`}>
                     <CoverArt
                       src={artist.coverUrl}
                       alt={artist.name}
                       className="w-full h-full transition-transform duration-300 group-hover:scale-105"
-                      iconSize={34}
+                      iconSize={ARTIST_GRID[viewMode].icon}
                       roundedClass="rounded-full"
                     />
                     <button

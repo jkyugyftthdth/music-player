@@ -20,6 +20,11 @@ interface ElectronAPI {
   analyze(path: string): Promise<NativeAnalysis>;
   transcode(path: string): Promise<string>;
   mediaUrl(path: string): Promise<string>;
+  loadStore(): Promise<string | null>;
+  saveStore(json: string): void;
+  saveCover(key: string, data: Uint8Array, mime: string): Promise<string>;
+  setMediaWatch(on: boolean): Promise<boolean>;
+  onOtherMediaPlaying(cb: () => void): () => void;
   onOpenFiles(cb: (paths: string[]) => void): () => void;
 }
 

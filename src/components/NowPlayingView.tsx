@@ -16,7 +16,28 @@ interface NowPlayingViewProps {
   onOpenDetails: (track: Track) => void;
 }
 
-type VisualizerMode = 'spectrum' | 'wave' | 'off';
+type VisualizerMode = 'spectrum' | 'wave' | 'mirror' | 'circle' | 'scope' | 'dots' | 'aurora' | 'off';
+
+const VIZ_MODES: { id: VisualizerMode; label: string }[] = [
+  { id: 'spectrum', label: 'Bars' },
+  { id: 'wave', label: 'Wave' },
+  { id: 'mirror', label: 'Mirror' },
+  { id: 'circle', label: 'Circle' },
+  { id: 'scope', label: 'Scope' },
+  { id: 'dots', label: 'Dots' },
+  { id: 'aurora', label: 'Aurora' },
+  { id: 'off', label: 'Off' },
+];
+
+function loadVizMode(): VisualizerMode {
+  try {
+    const v = localStorage.getItem('mp-viz-mode') as VisualizerMode | null;
+    if (v && VIZ_MODES.some((m) => m.id === v)) return v;
+  } catch {
+    // storage unavailable
+  }
+  return 'spectrum';
+}
 
 export function NowPlayingView({
   track,
@@ -31,7 +52,10 @@ export function NowPlayingView({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const smoothedBinsRef = useRef<Float32Array>(new Float32Array(72));
-  const [vizMode, setVizMode] = useState<VisualizerMode>('spectrum');
+  const [vizMode, setVizMode] = useState<VisualizerMode>(loadVizMode);
+  const peaksRef = useRef<Float32Array>(new Float32Array(72));
+  const timeBufRef = useRef<Uint8Array>(new Uint8Array(256));
+  const tickRef = useRef(0);
 
   const palette = ACCENT_PALETTES[accent];
 
@@ -184,6 +208,148 @@ export function NowPlayingView({
         ctx.globalAlpha = 1;
       }
 
+
+      tickRef.current += 1;
+      const tick = tickRef.current;
+      const cx = width * 0.5;
+      const cy = height * 0.44;
+      const dark = theme === 'dark';
+
+      if (vizMode === 'mirror') {
+        // Bars growing up and down from a center line
+        const gap = Math.max(3, Math.floor(width / 220));
+        const barWidth = Math.max(2, (width - gap * (barCount - 1)) / barCount);
+        const maxH = height * 0.22;
+        const mid = height * 0.8;
+        ctx.fillStyle = accentColor;
+        for (let i = 0; i < barCount; i++) {
+          const v = smoothed[i];
+          const h = Math.max(3, v * maxH);
+          const x = i * (barWidth + gap);
+          ctx.globalAlpha = (dark ? 0.2 : 0.15) + v * 0.4;
+          ctx.beginPath();
+          ctx.roundRect(x, mid - h, barWidth, h, [3, 3, 0, 0]);
+          ctx.fill();
+          ctx.globalAlpha = (dark ? 0.1 : 0.08) + v * 0.2;
+          ctx.beginPath();
+          ctx.roundRect(x, mid, barWidth, h * 0.7, [0, 0, 3, 3]);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      } else if (vizMode === 'circle') {
+        // Radial spectrum around the album art
+        const baseR = Math.min(width, height) * 0.27;
+        const maxLen = Math.min(width, height) * 0.2;
+        ctx.strokeStyle = accentColor;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(2, Math.min(width, height) * 0.006);
+        const rot = tick * 0.0012;
+        for (let i = 0; i < barCount; i++) {
+          const v = smoothed[i];
+          const a = (i / barCount) * Math.PI * 2 + rot - Math.PI / 2;
+          const len = 4 + v * maxLen;
+          ctx.globalAlpha = (dark ? 0.25 : 0.2) + v * 0.5;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(a) * baseR, cy + Math.sin(a) * baseR);
+          ctx.lineTo(cx + Math.cos(a) * (baseR + len), cy + Math.sin(a) * (baseR + len));
+          ctx.stroke();
+        }
+        ctx.globalAlpha = (dark ? 0.2 : 0.15) + bassEnergy * 0.3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, baseR - 6, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      } else if (vizMode === 'scope') {
+        // Live oscilloscope (time-domain waveform)
+        const buf = timeBufRef.current;
+        const analyserNode = audioEngine.getAnalyser();
+        let live = false;
+        if (analyserNode && isPlaying && !prefersReducedMotion) {
+          if (buf.length !== analyserNode.fftSize) timeBufRef.current = new Uint8Array(analyserNode.fftSize);
+          analyserNode.getByteTimeDomainData(timeBufRef.current);
+          live = true;
+        }
+        const data = timeBufRef.current;
+        const mid = height * 0.74;
+        const amp = height * 0.2;
+        ctx.strokeStyle = accentColor;
+        ctx.lineJoin = 'round';
+        for (let pass = 0; pass < 2; pass++) {
+          ctx.globalAlpha = pass === 0 ? (dark ? 0.18 : 0.12) : (dark ? 0.7 : 0.55);
+          ctx.lineWidth = pass === 0 ? 7 : 2;
+          ctx.beginPath();
+          for (let i = 0; i < data.length; i++) {
+            const x = (i / (data.length - 1)) * width;
+            const v = live ? (data[i] - 128) / 128 : Math.sin(i * 0.05 + tick * 0.03) * 0.04;
+            const y = mid + v * amp;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      } else if (vizMode === 'dots') {
+        // Dot matrix with falling peak caps
+        const peaks = peaksRef.current;
+        const cols = 36;
+        const cell = width / cols;
+        const rows = 14;
+        const rowH = (height * 0.4) / rows;
+        const dotR = Math.max(1.6, Math.min(cell, rowH) * 0.28);
+        ctx.fillStyle = accentColor;
+        for (let c = 0; c < cols; c++) {
+          const v = (smoothed[c * 2] + smoothed[c * 2 + 1]) / 2;
+          const lit = Math.round(v * rows);
+          if (lit > peaks[c]) peaks[c] = lit;
+          else peaks[c] = Math.max(0, peaks[c] - 0.18);
+          for (let r = 0; r < rows; r++) {
+            const x = c * cell + cell / 2;
+            const y = height - 10 - r * rowH;
+            const on = r < lit;
+            ctx.globalAlpha = on ? (dark ? 0.35 : 0.28) + (r / rows) * 0.45 : dark ? 0.05 : 0.04;
+            ctx.beginPath();
+            ctx.arc(x, y, dotR, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 0.85;
+          ctx.beginPath();
+          ctx.arc(c * cell + cell / 2, height - 10 - Math.min(rows - 1, peaks[c]) * rowH, dotR * 1.15, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      } else if (vizMode === 'aurora') {
+        // Slow flowing light ribbons driven by bass / mids / highs
+        let mids = 0;
+        let highs = 0;
+        for (let i = 20; i < 44; i++) mids += smoothed[i];
+        for (let i = 44; i < 72; i++) highs += smoothed[i];
+        mids /= 24;
+        highs /= 28;
+        const levels = [bassEnergy, mids, highs];
+        for (let l = 0; l < 3; l++) {
+          const amp = height * (0.06 + levels[l] * 0.16);
+          const baseY = height * (0.62 + l * 0.1);
+          ctx.beginPath();
+          ctx.moveTo(0, height);
+          for (let x = 0; x <= width; x += 12) {
+            const y =
+              baseY +
+              Math.sin(x * 0.006 + tick * (0.012 + l * 0.006) + l * 2) * amp +
+              Math.sin(x * 0.013 - tick * 0.009 + l) * amp * 0.5;
+            ctx.lineTo(x, y);
+          }
+          ctx.lineTo(width, height);
+          ctx.closePath();
+          const g = ctx.createLinearGradient(0, baseY - amp * 1.5, 0, height);
+          g.addColorStop(0, accentColor);
+          g.addColorStop(1, 'transparent');
+          ctx.globalAlpha = (dark ? 0.2 : 0.15) + levels[l] * 0.25;
+          ctx.fillStyle = g;
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
       if (isPlaying && !prefersReducedMotion) {
         animId = requestAnimationFrame(renderFrame);
       }
@@ -246,20 +412,27 @@ export function NowPlayingView({
           <div
             role="group"
             aria-label="Background visualizer style"
-            className="inline-flex items-center p-0.5 rounded-md bg-black/[0.06] dark:bg-white/[0.08] border border-black/[0.06] dark:border-white/[0.08]"
+            className="inline-flex flex-wrap items-center p-0.5 rounded-md bg-black/[0.06] dark:bg-white/[0.08] border border-black/[0.06] dark:border-white/[0.08]"
           >
-            {(['spectrum', 'wave', 'off'] as VisualizerMode[]).map((mode) => (
+            {VIZ_MODES.map(({ id: mode, label }) => (
               <button
                 key={mode}
                 type="button"
-                onClick={() => setVizMode(mode)}
+                onClick={() => {
+                  setVizMode(mode);
+                  try {
+                    localStorage.setItem('mp-viz-mode', mode);
+                  } catch {
+                    // storage unavailable
+                  }
+                }}
                 className={`h-7 px-2.5 rounded text-[12px] font-medium capitalize transition-colors ${
                   vizMode === mode
                     ? 'bg-white dark:bg-[#383838] text-neutral-950 dark:text-white shadow-xs'
                     : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white'
                 }`}
               >
-                {mode === 'spectrum' ? 'Bars' : mode === 'wave' ? 'Wave' : 'Off'}
+                {label}
               </button>
             ))}
           </div>

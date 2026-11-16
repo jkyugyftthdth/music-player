@@ -1,5 +1,6 @@
 'use strict';
-const { app, BrowserWindow, ipcMain, protocol, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol, Menu, session } = require('electron');
+const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { Readable } = require('node:stream');
@@ -28,6 +29,61 @@ let mainWindow = null;
 let rendererReady = false;
 const pendingOpen = [];
 let transcodeDir = null;
+let coversDir = null;
+let storeFile = null;
+
+app.setAppUserModelId('com.musicplayer.desktop');
+
+// ---- Windows: notice when another app (browser, Spotify, video player...) starts playing media ----
+// Uses the system media transport controls (the same list Windows shows in its media overlay).
+const WATCH_SCRIPT = `
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation\`1' })[0]
+function Await($op, $type) { $t = $asTaskGeneric.MakeGenericMethod($type).Invoke($null, @($op)); $t.Wait(-1) | Out-Null; $t.Result }
+[Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime] | Out-Null
+$mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])
+$last = '#'
+while ($true) {
+  $ids = @()
+  foreach ($s in $mgr.GetSessions()) {
+    if ([int]$s.GetPlaybackInfo().PlaybackStatus -eq 4) { $ids += $s.SourceAppUserModelId }
+  }
+  $cur = ($ids | Sort-Object) -join '|'
+  if ($cur -ne $last) { [Console]::Out.WriteLine('PLAYING:' + $cur); [Console]::Out.Flush(); $last = $cur }
+  Start-Sleep -Milliseconds 600
+}
+`;
+let watcher = null;
+let knownOthers = new Set();
+function stopMediaWatch() {
+  if (watcher) { try { watcher.kill(); } catch {} watcher = null; }
+  knownOthers = new Set();
+}
+function startMediaWatch() {
+  if (process.platform !== 'win32' || watcher) return;
+  try {
+    const encoded = Buffer.from(WATCH_SCRIPT, 'utf16le').toString('base64');
+    watcher = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-EncodedCommand', encoded], { windowsHide: true });
+    let buf = '';
+    watcher.stdout.on('data', (d) => {
+      buf += d.toString('utf8');
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (!line.startsWith('PLAYING:')) continue;
+        const ids = line.slice(8).split('|').filter(Boolean)
+          .filter((id) => !/musicplayer|electron/i.test(id));
+        const now = new Set(ids);
+        const started = ids.some((id) => !knownOthers.has(id));
+        knownOthers = now;
+        if (started && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('other-media-playing');
+      }
+    });
+    watcher.on('error', () => { watcher = null; });
+    watcher.on('close', () => { watcher = null; });
+  } catch { watcher = null; }
+}
 
 function extOf(p) {
   return path.extname(p).slice(1).toLowerCase();
@@ -92,7 +148,8 @@ function serveFile(request) {
   const url = new URL(request.url);
   const filePath = decodeURIComponent(url.pathname.slice(1));
   const ext = extOf(filePath);
-  const inCache = transcodeDir && path.resolve(filePath).startsWith(transcodeDir);
+  const resolved = path.resolve(filePath);
+  const inCache = (transcodeDir && resolved.startsWith(transcodeDir)) || (coversDir && resolved.startsWith(coversDir));
   if (!inCache && !AUDIO_EXT.has(ext) && !IMAGE_MIME[ext]) return new Response('Forbidden', { status: 403 });
 
   let stat;
@@ -143,6 +200,12 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     transcodeDir = path.join(app.getPath('userData'), 'transcode-cache');
+    coversDir = path.join(app.getPath('userData'), 'covers');
+    storeFile = path.join(app.getPath('userData'), 'library.json');
+    fs.mkdirSync(coversDir, { recursive: true });
+    // Allow reading audio-device names (so the output-device list shows real names).
+    session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'));
+    session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media');
     media.pruneCache(transcodeDir);
     protocol.handle('localmedia', serveFile);
 
@@ -159,6 +222,25 @@ if (!gotLock) {
       return toMediaUrl(out);
     });
     ipcMain.handle('media:url', (_e, file) => toMediaUrl(file));
+
+    // ---- saved library & settings ----
+    ipcMain.handle('store:load', () => {
+      try { return fs.readFileSync(storeFile, 'utf8'); } catch { return null; }
+    });
+    ipcMain.on('store:save', (_e, json) => {
+      try {
+        const tmp = storeFile + '.tmp';
+        fs.writeFileSync(tmp, json);
+        fs.renameSync(tmp, storeFile);
+      } catch {}
+    });
+    ipcMain.handle('cover:save', (_e, key, data, mime) => {
+      const ext = mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+      const file = path.join(coversDir, `${String(key).replace(/[^a-z0-9_-]/gi, '')}.${ext}`);
+      if (!fs.existsSync(file)) fs.writeFileSync(file, Buffer.from(data));
+      return toMediaUrl(file);
+    });
+    ipcMain.handle('media-watch:set', (_e, on) => { if (on) startMediaWatch(); else stopMediaWatch(); return true; });
     ipcMain.on('renderer-ready', () => {
       rendererReady = true;
       if (pendingOpen.length) {
@@ -174,4 +256,5 @@ if (!gotLock) {
   });
 
   app.on('window-all-closed', () => app.quit());
+  app.on('will-quit', stopMediaWatch);
 }
