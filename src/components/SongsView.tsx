@@ -188,21 +188,6 @@ export function SongsView({
             <span>Favorites</span>
           </button>
 
-          {/* Genre Filter */}
-          <select
-            aria-label="Filter songs by genre"
-            value={genreFilter}
-            onChange={(e) => setGenreFilter(e.target.value)}
-            className="h-9 px-3 text-[12.5px] font-medium rounded-md bg-white dark:bg-[#2b2b2b] text-neutral-800 dark:text-neutral-200 border border-black/[0.08] dark:border-white/[0.08] focus:outline-none cursor-pointer"
-          >
-            <option value="all">Genre: All genres</option>
-            {genres.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
-
           {/* View options: list or grid sizes */}
           <div className="relative" ref={viewMenuRef}>
             <button
@@ -210,17 +195,17 @@ export function SongsView({
               onClick={() => setViewMenuOpen((v) => !v)}
               aria-haspopup="menu"
               aria-expanded={viewMenuOpen}
-              aria-label="Song view options"
-              className="h-9 px-3 rounded-md inline-flex items-center gap-2 text-[12.5px] font-medium bg-white dark:bg-[#2b2b2b] hover:bg-neutral-50 dark:hover:bg-[#343434] text-neutral-800 dark:text-neutral-200 border border-black/[0.08] dark:border-white/[0.08] transition-colors"
+              aria-label="More options: view, genre, add music"
+              title="More options"
+              className="h-9 w-9 rounded-md inline-flex items-center justify-center bg-white dark:bg-[#2b2b2b] hover:bg-neutral-50 dark:hover:bg-[#343434] text-neutral-800 dark:text-neutral-200 border border-black/[0.08] dark:border-white/[0.08] transition-colors"
             >
-              <span>{SONG_VIEW_OPTIONS.find((o) => o.id === viewMode)?.label}</span>
               <MoreHorizontal size={16} />
             </button>
             {viewMenuOpen && (
               <div
                 role="menu"
                 aria-label="Song view options"
-                className="absolute right-0 top-10 w-48 py-1.5 rounded-lg bg-white dark:bg-[#2c2c2c] border border-black/10 dark:border-white/10 shadow-xl z-40"
+                className="absolute right-0 top-10 w-60 py-1.5 rounded-lg bg-white dark:bg-[#2c2c2c] border border-black/10 dark:border-white/10 shadow-xl z-40"
               >
                 <div className="px-3 py-1 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
                   View as
@@ -248,18 +233,50 @@ export function SongsView({
                     {viewMode === opt.id && <Check size={14} />}
                   </button>
                 ))}
+
+                <div className="my-1 border-t border-black/[0.06] dark:border-white/[0.06]" />
+                <div className="px-3 py-1 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+                  Genre
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {['all', ...genres].map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={genreFilter === g}
+                      onClick={() => {
+                        setGenreFilter(g);
+                        setViewMenuOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 flex items-center justify-between gap-2 text-left text-[13px] transition-colors ${
+                        genreFilter === g
+                          ? `bg-black/[0.06] dark:bg-white/[0.09] font-medium ${palette.activeText}`
+                          : 'text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <span className="truncate">{g === 'all' ? 'All genres' : g}</span>
+                      {genreFilter === g && <Check size={14} className="shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="my-1 border-t border-black/[0.06] dark:border-white/[0.06]" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setViewMenuOpen(false);
+                    onOpenFilePicker();
+                  }}
+                  className="w-full px-3 py-2 flex items-center gap-2.5 text-left text-[13px] font-medium text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors"
+                >
+                  <FolderPlus size={14} />
+                  <span>Add music</span>
+                </button>
               </div>
             )}
           </div>
-
-          <button
-            type="button"
-            onClick={onOpenFilePicker}
-            className="h-9 px-3.5 rounded-md inline-flex items-center gap-2 text-[12.5px] font-medium bg-white dark:bg-[#2b2b2b] hover:bg-neutral-50 dark:hover:bg-[#343434] text-neutral-800 dark:text-neutral-200 border border-black/[0.08] dark:border-white/[0.08] transition-colors whitespace-nowrap"
-          >
-            <FolderPlus size={14} />
-            <span>Add music</span>
-          </button>
 
           <button
             type="button"

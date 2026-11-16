@@ -1,4 +1,4 @@
-import { ArrowLeft, Disc3, Info } from 'lucide-react';
+import { ArrowLeft, Check, Disc3, Info, MoreHorizontal } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { audioEngine } from '@/src/audio/AudioEngine';
 import { AccentTheme, ThemeMode, Track } from '@/src/types/music';
@@ -56,6 +56,17 @@ export function NowPlayingView({
   const peaksRef = useRef<Float32Array>(new Float32Array(72));
   const timeBufRef = useRef<Uint8Array>(new Uint8Array(256));
   const tickRef = useRef(0);
+  const vizMenuRef = useRef<HTMLDivElement | null>(null);
+  const [vizMenuOpen, setVizMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!vizMenuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (vizMenuRef.current && !vizMenuRef.current.contains(e.target as Node)) setVizMenuOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [vizMenuOpen]);
 
   const palette = ACCENT_PALETTES[accent];
 
@@ -408,33 +419,56 @@ export function NowPlayingView({
         </button>
 
         <div className="flex items-center gap-2">
-          {/* Visualizer Mode Selector */}
-          <div
-            role="group"
-            aria-label="Background visualizer style"
-            className="inline-flex flex-wrap items-center p-0.5 rounded-md bg-black/[0.06] dark:bg-white/[0.08] border border-black/[0.06] dark:border-white/[0.08]"
-          >
-            {VIZ_MODES.map(({ id: mode, label }) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => {
-                  setVizMode(mode);
-                  try {
-                    localStorage.setItem('mp-viz-mode', mode);
-                  } catch {
-                    // storage unavailable
-                  }
-                }}
-                className={`h-7 px-2.5 rounded text-[12px] font-medium capitalize transition-colors ${
-                  vizMode === mode
-                    ? 'bg-white dark:bg-[#383838] text-neutral-950 dark:text-white shadow-xs'
-                    : 'text-neutral-600 dark:text-neutral-300 hover:text-neutral-950 dark:hover:text-white'
-                }`}
+          {/* Visualizer style: three-dot menu */}
+          <div className="relative" ref={vizMenuRef}>
+            <button
+              type="button"
+              onClick={() => setVizMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={vizMenuOpen}
+              aria-label="Visualizer style"
+              title="Visualizer style"
+              className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-[12.5px] font-medium bg-white/85 dark:bg-[#2b2b2b]/85 hover:bg-white dark:hover:bg-[#343434] text-neutral-800 dark:text-neutral-200 border border-black/[0.08] dark:border-white/[0.08] backdrop-blur-xs transition-colors"
+            >
+              <span>{VIZ_MODES.find((m) => m.id === vizMode)?.label}</span>
+              <MoreHorizontal size={16} />
+            </button>
+            {vizMenuOpen && (
+              <div
+                role="menu"
+                aria-label="Visualizer style"
+                className="absolute right-0 top-10 w-44 py-1.5 rounded-lg bg-white dark:bg-[#2c2c2c] border border-black/10 dark:border-white/10 shadow-xl z-40"
               >
-                {label}
-              </button>
-            ))}
+                <div className="px-3 py-1 text-[11px] font-medium text-neutral-500 dark:text-neutral-400">
+                  Visualizer
+                </div>
+                {VIZ_MODES.map(({ id: mode, label }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={vizMode === mode}
+                    onClick={() => {
+                      setVizMode(mode);
+                      setVizMenuOpen(false);
+                      try {
+                        localStorage.setItem('mp-viz-mode', mode);
+                      } catch {
+                        // storage unavailable
+                      }
+                    }}
+                    className={`w-full px-3 py-2 flex items-center justify-between text-[13px] transition-colors ${
+                      vizMode === mode
+                        ? `bg-black/[0.06] dark:bg-white/[0.09] font-medium ${palette.activeText}`
+                        : 'text-neutral-800 dark:text-neutral-200 hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+                    }`}
+                  >
+                    <span>{label}</span>
+                    {vizMode === mode && <Check size={14} />}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <button
@@ -468,7 +502,7 @@ export function NowPlayingView({
           <button
             type="button"
             onClick={() => onSelectArtist(track.artistId)}
-            className={`font-medium hover:underline ${palette.activeText}`}
+            className="font-medium hover:underline text-neutral-950 dark:text-white"
           >
             {track.artist}
           </button>
